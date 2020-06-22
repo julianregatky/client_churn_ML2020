@@ -5,7 +5,7 @@ rm(list=ls())
 # Cargamos todas las librerías necesarias
 # pacman las carga y, de no estar instaladas, previamente las instala
 if (!require('pacman')) install.packages('pacman')
-pacman::p_load(tidyverse,mlr)
+pacman::p_load(tidyverse,mlr,glmnet)
 
 # Fijamos el working directory
 setwd('/Users/julianregatky/Documents/GitHub/client_churn_ML2020')
@@ -13,7 +13,7 @@ setwd('/Users/julianregatky/Documents/GitHub/client_churn_ML2020')
 # Importamos el dataset
 dataset <- read.table('train.csv', header = T, sep =',', dec = '.')
 
-# ~~~~~~~~~~~~~~ FEATURE ENGINEERING ~~~~~~~~~~~~~~~~~~
+# ~~~~~~~ ANÁLISIS EXPLORATORIO Y FEATURE ENGINEERING ~~~~~~~~~~
 
 # Eliminamos features cuasi-constantes
 dataset <- removeConstantFeatures(dataset,
@@ -31,9 +31,6 @@ for(i in 1:(ncol(dataset)-1)) {
   }
 }
 dataset <- dataset[,setdiff(1:ncol(dataset),del_col)] # Eliminamos una de las duplicadas
-
-
-
 
 
 
