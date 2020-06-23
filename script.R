@@ -25,7 +25,7 @@ del_col <- c()
 for(i in 1:(ncol(dataset)-1)) {
   for(j in (i+1):ncol(dataset)) {
     if(identical(dataset[,i],dataset[,j])) {
-      # identificamos columnas identicas en el data.frame
+      # identificamos columnas idénticas en el data.frame
       del_col <- c(del_col,j)
     }
   }
