@@ -5,7 +5,7 @@ rm(list=ls())
 # Cargamos todas las librerías necesarias
 # pacman las carga y, de no estar instaladas, previamente las instala
 if (!require('pacman')) install.packages('pacman')
-pacman::p_load(tidyverse,mlr,glmnet)
+pacman::p_load(tidyverse,mlr,glmnet,pROC)
 
 # Fijamos el working directory
 setwd('/Users/julianregatky/Documents/GitHub/client_churn_ML2020')
@@ -89,5 +89,5 @@ coef(model.lasso, s = lambda_star)
 
 x_validation_matrix <- model.matrix( ~ .-1, x_validation)
 pred.lasso = predict(model.lasso, s = lambda_star , newx = x_validation_matrix)
-ecm.lasso = sum( (pred.lasso - y_validation )^2   ) / 50
-log(ecm.lasso)
+roc_obj <- suppressWarnings(roc(y_validation,pred.lasso))
+auc(roc_obj)
