@@ -42,18 +42,35 @@ dataset$nac[is.na(dataset$nac)] <- 2
 
 # ~~~~~~~~~~~~~~ MODELOS ~~~~~~~~~~~~~
 
+polynomial <- function(dataset, n = 3) {
+  # Toma un dataset, selecciona las variables numéricas y devuelve un
+  # data.frame con esas columnas elevadas a la i, tal que i=2,...,n
+  features.num <- dataset[,unlist(lapply(dataset, is.numeric))]
+  ret = dataset[,1]
+  for(i in 2:n) {
+    var.cols <- features.num^i; colnames(var.cols) <- paste0(colnames(var.cols),'_',i)
+    ret <- cbind(ret,var.cols)
+  }
+  return(ret[,-1])
+}
+
+# Agregamos términos polinómicos
+features.polynomial <- polynomial(dataset %>% select(-TARGET), n = 3)
+
 set.seed(123)
 index_train <- sample(1:nrow(dataset),round(nrow(dataset)*0.9))
-
-x_train <- dataset[index_train,] %>% select(-TARGET)
-x_validation <- dataset[setdiff(1:nrow(dataset),index_train),] %>% select(-TARGET)
-
-y_train <- dataset[index_train,'TARGET']
-y_validation <- dataset[setdiff(1:nrow(dataset),index_train),'TARGET']
 
 ###########################
 ###       LASSO         ###
 ###########################
+
+dataset.lasso <- cbind(dataset,features.polynomial)
+
+x_train <- dataset.lasso[index_train,] %>% select(-TARGET)
+x_validation <- dataset.lasso[setdiff(1:nrow(dataset.lasso),index_train),] %>% select(-TARGET)
+
+y_train <- dataset.lasso[index_train,'TARGET']
+y_validation <- dataset.lasso[setdiff(1:nrow(dataset.lasso),index_train),'TARGET']
 
 # Cross-Validation, 10 folds
 x_train_matrix <- model.matrix( ~ .-1, x_train)
