@@ -42,9 +42,10 @@ dataset$nac[is.na(dataset$nac)] <- 2
 
 # ~~~~~~~~~~~~~~ MODELOS ~~~~~~~~~~~~~
 
-polynomial <- function(dataset, n = 3) {
-  # Toma un dataset, selecciona las variables numéricas y devuelve un
-  # data.frame con esas columnas elevadas a la i, tal que i=2,...,n
+# Toma un dataset, selecciona las variables numéricas y devuelve un
+# data.frame con esas columnas elevadas a la i, tal que i=2,...,n
+polynomial <- function(dataset, n = 3)
+{
   features.num <- dataset[,unlist(lapply(dataset, is.numeric))]
   ret = dataset[,1]
   for(i in 2:n) {
