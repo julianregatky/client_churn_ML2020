@@ -105,6 +105,12 @@ coef(model.lasso, s = lambda_star)
   
 
 x_validation_matrix <- model.matrix( ~ .-1, x_validation)
-pred.lasso = predict(model.lasso, s = lambda_star , newx = x_validation_matrix)
+pred.lasso = predict(model.lasso, s = lambda_star , newx = x_validation_matrix, type = 'response')
 roc_obj <- suppressWarnings(roc(y_validation,pred.lasso))
 auc(roc_obj)
+
+# ggplot(data = data.frame(est = as.vector(pred.lasso),
+#                          actual = factor(y_validation)), aes(x = est, fill = actual, alpha = 0.8)) +
+#   geom_density() +
+#   theme_bw()
+
