@@ -5,7 +5,7 @@ rm(list=ls())
 # Cargamos todas las librerías necesarias
 # pacman las carga y, de no estar instaladas, previamente las instala
 if (!require('pacman')) install.packages('pacman')
-pacman::p_load(tidyverse,mlr,glmnet,pROC)
+pacman::p_load(tidyverse,mlr,glmnet,pROC,splines,rpart)
 
 # Fijamos el working directory
 setwd('/Users/julianregatky/Documents/GitHub/client_churn_ML2020')
@@ -55,8 +55,24 @@ polynomial <- function(dataset, n = 3)
   return(ret[,-1])
 }
 
-# Agregamos términos polinómicos
-features.polynomial <- polynomial(dataset %>% select(-TARGET), n = 3)
+splines_matrix <- function(dataset) {
+  features.num <- dataset[,unlist(lapply(dataset, is.numeric))]
+  mat <- lapply(features.num, function(x) as.data.frame(bs(x,knots = quantile(x)[1:3], degree = 3))) %>% bind_cols()
+  return(mat)
+}
+
+# Si agregamos nomonios adicionales para todos los features
+# el algoritmo que usa glmnet para la regresión no converge
+# Seleccionamos las variables para splines con un árbol de decisión
+tree <- rpart(formula = TARGET ~., data = dataset)
+features_importantes <- names(tree$variable.importance)
+# Control local polinómico de hasta grado 3
+features.spline <- splines_matrix(dataset[,features_importantes])
+
+# Agregamos términos polinómicos para el resto de las variables
+features.polynomial <- polynomial(dataset[,setdiff(colnames(dataset),c(features_importantes,'TARGET'))],
+                                  n = 2)
+
 
 set.seed(123)
 index_train <- sample(1:nrow(dataset),round(nrow(dataset)*0.9))
@@ -65,7 +81,7 @@ index_train <- sample(1:nrow(dataset),round(nrow(dataset)*0.9))
 ###       LASSO         ###
 ###########################
 
-dataset.lasso <- cbind(dataset,features.polynomial)
+dataset.lasso <- cbind(dataset,features.spline,features.polynomial)
 
 x_train <- dataset.lasso[index_train,] %>% select(-TARGET)
 x_validation <- dataset.lasso[setdiff(1:nrow(dataset.lasso),index_train),] %>% select(-TARGET)
@@ -86,6 +102,7 @@ model.lasso = glmnet(x = x_train_matrix,
                      alpha = 1, # LASSO
                      lambda = lambda_star)
 coef(model.lasso, s = lambda_star)
+  
 
 x_validation_matrix <- model.matrix( ~ .-1, x_validation)
 pred.lasso = predict(model.lasso, s = lambda_star , newx = x_validation_matrix)
