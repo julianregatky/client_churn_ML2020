@@ -5,7 +5,7 @@ rm(list=ls())
 # Cargamos todas las librerías necesarias
 # pacman las carga y, de no estar instaladas, previamente las instala
 if (!require('pacman')) install.packages('pacman')
-pacman::p_load(tidyverse,mlr,glmnet,pROC,splines,rpart)
+pacman::p_load(tidyverse,mlr,glmnet,ROCR,splines,rpart)
 
 # Fijamos el working directory
 setwd('/Users/julianregatky/Documents/GitHub/client_churn_ML2020')
@@ -73,9 +73,8 @@ features.spline <- splines_matrix(dataset[,features_importantes])
 features.polynomial <- polynomial(dataset[,setdiff(colnames(dataset),c(features_importantes,'TARGET'))],
                                   n = 2)
 
-
-set.seed(123)
-index_train <- sample(1:nrow(dataset),round(nrow(dataset)*0.9))
+set.seed(123) # Por replicabilidad
+index_train <- sample(1:nrow(dataset),round(nrow(dataset)*0.9)) # Muestra de training
 
 ###########################
 ###       LASSO         ###
@@ -106,8 +105,10 @@ coef(model.lasso, s = lambda_star)
 
 x_validation_matrix <- model.matrix( ~ .-1, x_validation)
 pred.lasso = predict(model.lasso, s = lambda_star , newx = x_validation_matrix, type = 'response')
-roc_obj <- suppressWarnings(roc(y_validation,pred.lasso))
-auc(roc_obj)
+performance(prediction(pred.lasso,y_validation),"auc")@y.values[[1]] #AUC
+auc_lasso <- performance(prediction(pred.lasso,y_validation),"tpr","fpr")
+plot(auc_lasso)
+points(auc_lasso@x.values[[1]],auc_lasso@y.values[[1]], type = 'l', col = 'red')
 
 # ggplot(data = data.frame(est = as.vector(pred.lasso),
 #                          actual = factor(y_validation)), aes(x = est, fill = actual, alpha = 0.8)) +
