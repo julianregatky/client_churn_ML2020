@@ -163,8 +163,8 @@ for(i in 1:nrow(random_grid)) {
   }
 }
 
-pred.rforest = predict(best_model,newdata=test)
-performance(prediction(pred.rforest,test$TARGET),"auc")@y.values[[1]] #AUC
-auc_rforest <- performance(prediction(pred.rforest,test$TARGET),"tpr","fpr")
-points(auc_rforest@x.values[[1]],auc_rforest@y.values[[1]], type = 'l', col = 'blue')
+pred.gbm = predict(best_model,newdata=test)
+performance(prediction(pred.gbm,test$TARGET),"auc")@y.values[[1]] #AUC
+auc_gbm <- performance(prediction(pred.gbm,test$TARGET),"tpr","fpr")
+points(auc_gbm@x.values[[1]],auc_gbm@y.values[[1]], type = 'l', col = 'blue')
 
