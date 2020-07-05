@@ -8,7 +8,8 @@ if (!require('pacman')) install.packages('pacman')
 pacman::p_load(tidyverse,mlr,glmnet,ROCR,splines,rpart,randomForest,gbm)
 
 # Fijamos el working directory
-setwd('/Users/julianregatky/Documents/GitHub/client_churn_ML2020')
+#setwd('/Users/julianregatky/Documents/GitHub/client_churn_ML2020')
+setwd('/home/julian/Documents/GitHub/client_churn_ML2020')
 
 # Importamos el dataset
 dataset <- read.table('train.csv', header = T, sep =',', dec = '.')
@@ -49,7 +50,7 @@ dataset$nac[is.na(dataset$nac)] <- 2
 # ~~~~~~~~~~~~~~ MODELOS ~~~~~~~~~~~~~
 
 set.seed(123) # Por replicabilidad
-index_train <- sample(1:nrow(dataset),round(nrow(dataset)*0.9)) # Muestra de training
+index_train <- sample(1:nrow(dataset),round(nrow(dataset)*0.8)) # Muestra de training
 
 ###########################
 ###       LASSO         ###
@@ -58,16 +59,13 @@ index_train <- sample(1:nrow(dataset),round(nrow(dataset)*0.9)) # Muestra de tra
 # Si agregamos nomonios adicionales para todos los features
 # el algoritmo que usa glmnet para la regresión no converge
 # Seleccionamos las variables para splines con un árbol de decisión
-tree <- rpart(formula = TARGET ~., data = dataset)
+# Sólo usamos datos de training para evitar data leakage!
+tree <- rpart(formula = TARGET ~., data = dataset[index_train,]) 
 features_importantes <- names(tree$variable.importance)
 # Control local polinómico de hasta grado 3
 features.spline <- splines_matrix(dataset[,features_importantes])
 
-# Agregamos términos polinómicos para el resto de las variables
-features.polynomial <- polynomial(dataset[,setdiff(colnames(dataset),c(features_importantes,'TARGET'))],
-                                  n = 2)
-
-dataset.lasso <- cbind(dataset,features.spline,features.polynomial)
+dataset.lasso <- cbind(dataset,features.spline)
 
 x_train <- dataset.lasso[index_train,] %>% select(-TARGET)
 x_test <- dataset.lasso[setdiff(1:nrow(dataset.lasso),index_train),] %>% select(-TARGET)
@@ -104,12 +102,13 @@ plot(auc_lasso)
 ###########################
 ###    Random Forest    ###
 ###########################
+rm(list = setdiff(ls(),c('dataset','index_train')))
 
 # Separamos en training, validation y testing sets (testing set idem antes)
-index_validation <- sample(index_train,round(length(index_train)*0.2))
+test <- dataset[setdiff(1:nrow(dataset),index_train),]
+index_validation <- sample(index_train,nrow(test)) # Separamos misma cant de obs que test set pero del training set para validación
 train <- dataset[setdiff(index_train, index_validation),]
 validation <- dataset[index_validation,]
-test <- dataset[setdiff(1:nrow(dataset),index_train),]
 
 full_grid <- expand.grid(mtry = 5:20, sample = seq(0.4,0.8,0.1), maxnodes = 20:50, nodesize = 50:200, ntree = seq(500,1500,100))
 random_grid <- full_grid[sample(1:nrow(full_grid),30),]
@@ -132,9 +131,10 @@ for(i in 1:nrow(random_grid)) {
   }
 }
 
+
 pred.rforest = predict(best_model,newdata=test)
 performance(prediction(pred.rforest,test$TARGET),"auc")@y.values[[1]] #AUC
-auc_rforest <- performance(prediction(pred.rforest,y_validation),"tpr","fpr")
+auc_rforest <- performance(prediction(pred.rforest,y_test),"tpr","fpr")
 points(auc_rforest@x.values[[1]],auc_rforest@y.values[[1]], type = 'l', col = 'red')
 
 
@@ -142,7 +142,7 @@ points(auc_rforest@x.values[[1]],auc_rforest@y.values[[1]], type = 'l', col = 'r
 ###        GBM          ###
 ###########################
 
-full_grid <- expand.grid(n.trees = seq(500,5000,100), shrinkage = seq(0.001,0.01,0.001), interaction.depth = 2:10, train.fraction = seq(0.5,0.9,0.1), bag.fraction = seq(0.5,0.9,0.1))
+full_grid <- expand.grid(n.trees = seq(100,500,100), shrinkage = seq(0.001,0.01,0.001), interaction.depth = 2:10, train.fraction = seq(0.5,0.9,0.1), bag.fraction = seq(0.5,0.9,0.1))
 random_grid <- full_grid[sample(1:nrow(full_grid),30),]
 best_auc <- 0
 for(i in 1:nrow(random_grid)) {
@@ -165,6 +165,6 @@ for(i in 1:nrow(random_grid)) {
 
 pred.rforest = predict(best_model,newdata=test)
 performance(prediction(pred.rforest,test$TARGET),"auc")@y.values[[1]] #AUC
-auc_rforest <- performance(prediction(pred.rforest,y_validation),"tpr","fpr")
-points(auc_rforest@x.values[[1]],auc_rforest@y.values[[1]], type = 'l', col = 'red')
+auc_rforest <- performance(prediction(pred.rforest,y_test),"tpr","fpr")
+points(auc_rforest@x.values[[1]],auc_rforest@y.values[[1]], type = 'l', col = 'blue')
 
