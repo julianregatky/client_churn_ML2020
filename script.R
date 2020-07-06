@@ -92,12 +92,6 @@ pred.lasso = predict(model.lasso, s = lambda_star , newx = x_test_matrix, type =
 performance(prediction(pred.lasso,y_test),"auc")@y.values[[1]] #AUC
 auc_lasso <- performance(prediction(pred.lasso,y_test),"tpr","fpr")
 plot(auc_lasso)
-#points(auc_lasso@x.values[[1]],auc_lasso@y.values[[1]], type = 'l', col = 'red')
-
-# ggplot(data = data.frame(est = as.vector(pred.lasso),
-#                          actual = factor(y_validation)), aes(x = est, fill = actual, alpha = 0.8)) +
-#   geom_density() +
-#   theme_bw()
 
 ###########################
 ###    Random Forest    ###
@@ -169,4 +163,14 @@ pred.gbm = predict(best_model,newdata=test, type="response")
 performance(prediction(pred.gbm,test$TARGET),"auc")@y.values[[1]] #AUC
 auc_gbm <- performance(prediction(pred.gbm,test$TARGET),"tpr","fpr")
 points(auc_gbm@x.values[[1]],auc_gbm@y.values[[1]], type = 'l', col = 'blue')
+
+
+# ~~~~~~~~~~~~~~ COMPARATIVA ~~~~~~~~~~~~~
+
+#points(auc_lasso@x.values[[1]],auc_lasso@y.values[[1]], type = 'l', col = 'red')
+
+# ggplot(data = data.frame(est = as.vector(pred.lasso),
+#                          actual = factor(y_validation)), aes(x = est, fill = actual, alpha = 0.8)) +
+#   geom_density() +
+#   theme_bw()
 
