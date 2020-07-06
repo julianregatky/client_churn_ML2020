@@ -128,6 +128,7 @@ for(i in 1:nrow(random_grid)) {
   cat(i,'|',paste(colnames(random_grid),random_grid[i,],collapse = ' - '),'| auc:',performance(prediction(pred.rforest,validation$TARGET),"auc")@y.values[[1]],'\n')
   if(performance(prediction(pred.rforest,validation$TARGET),"auc")@y.values[[1]] > best_auc) {
     best_model <- random.forest
+    best_auc <- performance(prediction(pred.rforest,validation$TARGET),"auc")@y.values[[1]]
   }
 }
 
@@ -142,7 +143,7 @@ points(auc_rforest@x.values[[1]],auc_rforest@y.values[[1]], type = 'l', col = 'r
 ###        GBM          ###
 ###########################
 
-full_grid <- expand.grid(n.trees = seq(100,500,100), shrinkage = seq(0.001,0.01,0.001), interaction.depth = 2:10, train.fraction = seq(0.5,0.9,0.1), bag.fraction = seq(0.5,0.9,0.1))
+full_grid <- expand.grid(n.trees = seq(100,1000,100), shrinkage = seq(0.001,0.01,0.001), interaction.depth = 2:10, train.fraction = seq(0.5,0.9,0.1), bag.fraction = seq(0.5,0.9,0.1))
 random_grid <- full_grid[sample(1:nrow(full_grid),30),]
 best_auc <- 0
 for(i in 1:nrow(random_grid)) {
@@ -160,6 +161,7 @@ for(i in 1:nrow(random_grid)) {
   cat(i,'|',paste(colnames(random_grid),random_grid[i,],collapse = ' - '),'| auc:',performance(prediction(pred.gbm,validation$TARGET),"auc")@y.values[[1]],'\n')
   if(performance(prediction(pred.gbm,validation$TARGET),"auc")@y.values[[1]] > best_auc) {
     best_model <- model.gbm
+    best_auc <- performance(prediction(pred.gbm,validation$TARGET),"auc")@y.values[[1]]
   }
 }
 
