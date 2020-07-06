@@ -163,7 +163,7 @@ for(i in 1:nrow(random_grid)) {
   }
 }
 
-pred.gbm = predict(best_model,newdata=test)
+pred.gbm = predict(best_model,newdata=test, type="response")
 performance(prediction(pred.gbm,test$TARGET),"auc")@y.values[[1]] #AUC
 auc_gbm <- performance(prediction(pred.gbm,test$TARGET),"tpr","fpr")
 points(auc_gbm@x.values[[1]],auc_gbm@y.values[[1]], type = 'l', col = 'blue')
