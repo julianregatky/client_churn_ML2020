@@ -5,7 +5,7 @@ rm(list=ls())
 # Cargamos todas las librerías necesarias
 # pacman las carga y, de no estar instaladas, previamente las instala
 if (!require('pacman')) install.packages('pacman')
-pacman::p_load(tidyverse,mlr,glmnet,ROCR,splines,rpart,randomForest,gbm)
+pacman::p_load(tidyverse,mlr,glmnet,ROCR,splines,rpart,randomForest,gbm,e1071)
 
 # Fijamos el working directory
 #setwd('/Users/julianregatky/Documents/GitHub/client_churn_ML2020')
@@ -100,35 +100,31 @@ rm(list = setdiff(ls(),c('dataset','index_train')))
 
 # Separamos en training, validation y testing sets (testing set idem antes)
 test <- dataset[setdiff(1:nrow(dataset),index_train),]
-index_validation <- sample(index_train,nrow(test)) # Separamos misma cant de obs que test set pero del training set para validación
-train <- dataset[setdiff(index_train, index_validation),]
-validation <- dataset[index_validation,]
+train <- dataset[index_train,]
 
-full_grid <- expand.grid(mtry = 5:20, sample = seq(0.4,0.8,0.1), maxnodes = 20:50, nodesize = 50:200, ntree = seq(500,1500,100))
+full_grid <- expand.grid(mtry = 5:20, sample = seq(0.4,0.8,0.1), maxnodes = 20:50, nodesize = 50:200, ntree = seq(200,1000,100))
 random_grid <- full_grid[sample(1:nrow(full_grid),30),]
 best_auc <- 0
 for(i in 1:nrow(random_grid)) {
-  random.forest <- randomForest(TARGET ~ .,
+  random.forest <- randomForest(factor(TARGET) ~ .,
                                data = train,
                                mtry = random_grid$mtry[i],
                                ntree = random_grid$ntree[i],
                                sample = floor(random_grid$sample[i]*nrow(train)),
                                maxnodes = random_grid$maxnodes[i],
-                               nodesize = random_grid$nodesize[i],
-                               importance = T,
-                               proximity = F
+                               nodesize = random_grid$nodesize[i]
   )
-  pred.rforest = predict(random.forest,newdata=validation)
-  cat(i,'|',paste(colnames(random_grid),random_grid[i,],collapse = ' - '),'| auc:',performance(prediction(pred.rforest,validation$TARGET),"auc")@y.values[[1]],'\n')
-  if(performance(prediction(pred.rforest,validation$TARGET),"auc")@y.values[[1]] > best_auc) {
+  pred.rforest.oob = random.forest$votes[,2]
+  cat(i,'|',paste(colnames(random_grid),random_grid[i,],collapse = ' - '),'| auc:',performance(prediction(pred.rforest.oob,train$TARGET),"auc")@y.values[[1]],'\n')
+  if(performance(prediction(pred.rforest.oob,train$TARGET),"auc")@y.values[[1]] > best_auc) {
     best_model <- random.forest
-    best_auc <- performance(prediction(pred.rforest,validation$TARGET),"auc")@y.values[[1]]
+    best_auc <- performance(prediction(pred.rforest.oob,train$TARGET),"auc")@y.values[[1]]
   }
 }
 
 
 pred.rforest = predict(best_model,newdata=test)
-performance(prediction(pred.rforest,test$TARGET),"auc")@y.values[[1]] #AUC
+performance(prediction(pred.rforest,factor(test$TARGET)),"auc")@y.values[[1]] #AUC
 auc_rforest <- performance(prediction(pred.rforest,test$TARGET),"tpr","fpr")
 points(auc_rforest@x.values[[1]],auc_rforest@y.values[[1]], type = 'l', col = 'red')
 
@@ -136,6 +132,13 @@ points(auc_rforest@x.values[[1]],auc_rforest@y.values[[1]], type = 'l', col = 'r
 ###########################
 ###        GBM          ###
 ###########################
+rm(list = setdiff(ls(),c('dataset','index_train')))
+
+# Separamos en training, validation y testing sets (testing set idem antes)
+test <- dataset[setdiff(1:nrow(dataset),index_train),]
+index_validation <- sample(index_train,nrow(test)) # Separamos misma cant de obs que test set pero del training set para validación
+train <- dataset[setdiff(index_train, index_validation),]
+validation <- dataset[index_validation,]
 
 full_grid <- expand.grid(n.trees = seq(100,1000,100), shrinkage = seq(0.001,0.01,0.001), interaction.depth = 2:10, train.fraction = seq(0.5,0.9,0.1), bag.fraction = seq(0.5,0.9,0.1))
 random_grid <- full_grid[sample(1:nrow(full_grid),30),]
@@ -143,7 +146,7 @@ best_auc <- 0
 for(i in 1:nrow(random_grid)) {
   model.gbm = gbm(TARGET ~ .,
                 data = train, 
-                distribution = "bernoulli",
+                distribution = 'bernoulli',
                 n.trees = random_grid$n.trees[i],
                 shrinkage = random_grid$shrinkage[i],
                 interaction.depth = random_grid$interaction.depth[i],
@@ -164,6 +167,18 @@ performance(prediction(pred.gbm,test$TARGET),"auc")@y.values[[1]] #AUC
 auc_gbm <- performance(prediction(pred.gbm,test$TARGET),"tpr","fpr")
 points(auc_gbm@x.values[[1]],auc_gbm@y.values[[1]], type = 'l', col = 'blue')
 
+
+###########################
+###        SVM          ###
+###########################
+svm.lin <- svm(TARGET ~ ., 
+               data = train, 
+               type = 'C-classification',
+               cross = 10,
+               kernel = "linear",
+               cost = 2^(-1:5), 
+               scale = TRUE,
+               probability = TRUE)
 
 # ~~~~~~~~~~~~~~ COMPARATIVA ~~~~~~~~~~~~~
 
