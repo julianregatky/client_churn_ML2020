@@ -91,12 +91,11 @@ x_test_matrix <- model.matrix( ~ .-1, x_test)
 pred.lasso = predict(model.lasso, s = lambda_star , newx = x_test_matrix, type = 'response')
 performance(prediction(pred.lasso,y_test),"auc")@y.values[[1]] #AUC
 auc_lasso <- performance(prediction(pred.lasso,y_test),"tpr","fpr")
-plot(auc_lasso)
 
 ###########################
 ###    Random Forest    ###
 ###########################
-rm(list = setdiff(ls(),c('dataset','index_train','s')))
+rm(list = setdiff(ls(),c('dataset','index_train','s','auc_lasso','pred.lasso')))
 
 # Separamos en training, validation y testing sets (testing set idem antes)
 test <- dataset[setdiff(1:nrow(dataset),index_train),]
@@ -126,13 +125,12 @@ for(i in 1:nrow(random_grid)) {
 pred.rforest = predict(best_model,newdata=test)
 performance(prediction(pred.rforest,factor(test$TARGET)),"auc")@y.values[[1]] #AUC
 auc_rforest <- performance(prediction(pred.rforest,test$TARGET),"tpr","fpr")
-points(auc_rforest@x.values[[1]],auc_rforest@y.values[[1]], type = 'l', col = 'red')
 
 
 ###########################
 ###        GBM          ###
 ###########################
-rm(list = setdiff(ls(),c('dataset','index_train','s')))
+rm(list = setdiff(ls(),c('dataset','index_train','s','auc_lasso','pred.lasso','auc_rforest','auc_rforest')))
 
 # Separamos en training, validation y testing sets (testing set idem antes)
 test <- dataset[setdiff(1:nrow(dataset),index_train),]
@@ -165,13 +163,11 @@ for(i in 1:nrow(random_grid)) {
 pred.gbm = predict(best_model,newdata=test, type="response")
 performance(prediction(pred.gbm,test$TARGET),"auc")@y.values[[1]] #AUC
 auc_gbm <- performance(prediction(pred.gbm,test$TARGET),"tpr","fpr")
-points(auc_gbm@x.values[[1]],auc_gbm@y.values[[1]], type = 'l', col = 'blue')
-
 
 ###########################
 ###        NNET         ###
 ###########################
-rm(list = setdiff(ls(),c('dataset','index_train','s')))
+#rm(list = setdiff(ls(),c('dataset','index_train','s')))
 
 # Separamos en training, validation y testing sets (testing set idem antes)
 test <- dataset[setdiff(1:nrow(dataset),index_train),]
@@ -205,7 +201,11 @@ points(auc_nnet@x.values[[1]],auc_nnet@y.values[[1]], type = 'l', col = 'blue')
 
 # ~~~~~~~~~~~~~~ COMPARATIVA ~~~~~~~~~~~~~
 
-#points(auc_lasso@x.values[[1]],auc_lasso@y.values[[1]], type = 'l', col = 'red')
+plot(auc_lasso)
+points(auc_rforest@x.values[[1]],auc_rforest@y.values[[1]], type = 'l', col = 'red')
+points(auc_gbm@x.values[[1]],auc_gbm@y.values[[1]], type = 'l', col = 'blue')
+legend(0.7,0.25, legend = c('LASSO','Random Forest','GBM'), col = c('black','red','blue'),
+       lty=rep(1,3), cex=0.6)
 
 # ggplot(data = data.frame(est = as.vector(pred.lasso),
 #                          actual = factor(y_validation)), aes(x = est, fill = actual, alpha = 0.8)) +
