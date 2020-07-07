@@ -5,11 +5,11 @@ rm(list=ls())
 # Cargamos todas las librerías necesarias
 # pacman las carga y, de no estar instaladas, previamente las instala
 if (!require('pacman')) install.packages('pacman')
-pacman::p_load(tidyverse,mlr,glmnet,ROCR,splines,rpart,randomForest,gbm,e1071)
+pacman::p_load(tidyverse,mlr,glmnet,ROCR,splines,rpart,randomForest,gbm,nnet)
 
 # Fijamos el working directory
-setwd('/Users/julianregatky/Documents/GitHub/client_churn_ML2020')
-#setwd('/home/julian/Documents/GitHub/client_churn_ML2020')
+#setwd('/Users/julianregatky/Documents/GitHub/client_churn_ML2020')
+setwd('/home/julian/Documents/GitHub/client_churn_ML2020')
 
 # Importamos el dataset
 dataset <- read.table('train.csv', header = T, sep =',', dec = '.')
@@ -28,10 +28,10 @@ dataset <- removeConstantFeatures(dataset,
                                   dont.rm = 'TARGET')
 
 # Unificamos features duplicados
-del_col <- c()
-for(i in 1:(ncol(dataset)-1)) {
-  for(j in (i+1):ncol(dataset)) {
-    if(identical(dataset[,i],dataset[,j])) {
+del_col <- c(); dataset_full <- dataset %>% na.omit()
+for(i in 1:(ncol(dataset_full)-1)) {
+  for(j in (i+1):ncol(dataset_full)) {
+    if(cor(dataset_full[,i],dataset_full[,j]) > 0.99) {
       # identificamos columnas idénticas en el data.frame
       del_col <- c(del_col,j)
     }
@@ -96,26 +96,32 @@ plot(auc_lasso)
 ###########################
 ###    Random Forest    ###
 ###########################
-rm(list = setdiff(ls(),c('dataset','index_train')))
+rm(list = setdiff(ls(),c('dataset','index_train','s')))
 
 # Separamos en training, validation y testing sets (testing set idem antes)
 test <- dataset[setdiff(1:nrow(dataset),index_train),]
-train <- dataset[index_train,]
+index_validation <- sample(index_train,nrow(test)) # Separamos misma cant de obs que test set pero del training set para validación
+train <- dataset[setdiff(index_train, index_validation),]
+validation <- dataset[index_validation,]
 
-random.forest <- randomForest(factor(TARGET) ~ .,
-                              data = train,
-                              mtry = floor(sqrt(ncol(train))),
-                              ntree = random_grid$ntree[i],
-                              sample = floor(random_grid$sample[i]*nrow(train)),
-                              maxnodes = random_grid$maxnodes[i],
-                              nodesize = random_grid$nodesize[i],
-                              importance = T)
-
-tune.rf <- tuneRF(x = subset(train, select = -TARGET), y = train$TARGET, ntreeTry = 500, doBest = TRUE)
-random.forest <- randomForest(factor(TARGET) ~ .,
-                              data = train,
-                              importance = T)
-
+full_grid <- expand.grid(mtry = 5:20, ntree = seq(100,3000,100), maxnodes = seq(20,100,5))
+random_grid <- full_grid[sample(1:nrow(full_grid),30),]
+best_auc <- 0
+for(i in 1:nrow(random_grid)) {
+  random.forest <- s(randomForest(TARGET ~.,
+                                data = train,
+                                mtry = random_grid$mtry[i],
+                                ntree = random_grid$ntree[i],
+                                maxnodes = random_grid$maxnodes[i],
+                                importance = T,
+                                proximity = F))
+  pred.rforest = predict(random.forest,newdata=validation)
+  cat(i,'|',paste(colnames(random_grid),random_grid[i,],collapse = ' - '),'| auc:',performance(prediction(pred.rforest,validation$TARGET),"auc")@y.values[[1]],'\n')
+  if(performance(prediction(pred.rforest,validation$TARGET),"auc")@y.values[[1]] > best_auc) {
+    best_model <- random.forest
+    best_auc <- performance(prediction(pred.rforest,validation$TARGET),"auc")@y.values[[1]]
+  }
+}
 
 pred.rforest = predict(best_model,newdata=test)
 performance(prediction(pred.rforest,factor(test$TARGET)),"auc")@y.values[[1]] #AUC
@@ -126,7 +132,7 @@ points(auc_rforest@x.values[[1]],auc_rforest@y.values[[1]], type = 'l', col = 'r
 ###########################
 ###        GBM          ###
 ###########################
-rm(list = setdiff(ls(),c('dataset','index_train')))
+rm(list = setdiff(ls(),c('dataset','index_train','s')))
 
 # Separamos en training, validation y testing sets (testing set idem antes)
 test <- dataset[setdiff(1:nrow(dataset),index_train),]
@@ -163,16 +169,39 @@ points(auc_gbm@x.values[[1]],auc_gbm@y.values[[1]], type = 'l', col = 'blue')
 
 
 ###########################
-###        SVM          ###
+###        NNET         ###
 ###########################
-svm.lin <- svm(TARGET ~ ., 
-               data = train, 
-               type = 'C-classification',
-               cross = 10,
-               kernel = "linear",
-               cost = 2^(-1:5), 
-               scale = TRUE,
-               probability = TRUE)
+rm(list = setdiff(ls(),c('dataset','index_train','s')))
+
+# Separamos en training, validation y testing sets (testing set idem antes)
+test <- dataset[setdiff(1:nrow(dataset),index_train),]
+index_validation <- sample(index_train,nrow(test)) # Separamos misma cant de obs que test set pero del training set para validación
+train <- dataset[setdiff(index_train, index_validation),]
+validation <- dataset[index_validation,]
+
+full_grid <- expand.grid(size = 4:8, decay = seq(0.01,0.1,0.01))
+random_grid <- full_grid[sample(1:nrow(full_grid),15),]
+best_auc <- 0
+for(i in 1:nrow(random_grid)) {
+  model.nnet <- nnet(x = train[,setdiff(colnames(train),'TARGET')],
+                     y = class.ind(train$TARGET),
+                     size = random_grid$size[i],
+                     linout = FALSE, # linout = TRUE (en caso de resolver prob de reg.)
+                     entropy = TRUE, # Función de riesgo empírico a minimizar.
+                     decay = random_grid$decay[i],   # Parámetro de regularización "lambda".
+                     maxit = 1000)
+  pred.nnet = predict(model.nnet,newdata=validation)
+  cat(i,'|',paste(colnames(random_grid),random_grid[i,],collapse = ' - '),'| auc:',performance(prediction(pred.nnet[,2],validation$TARGET),"auc")@y.values[[1]],'\n')
+  if(performance(prediction(pred.nnet[,2],validation$TARGET),"auc")@y.values[[1]] > best_auc) {
+    best_model <- model.nnet
+    best_auc <- performance(prediction(pred.nnet[,2],validation$TARGET),"auc")@y.values[[1]]
+  }
+}
+
+pred.nnet = predict(model.nnet,newdata=test)[,2]
+performance(prediction(pred.nnet,test$TARGET),"auc")@y.values[[1]] #AUC
+auc_nnet <- performance(prediction(pred.nnet,test$TARGET),"tpr","fpr")
+points(auc_nnet@x.values[[1]],auc_nnet@y.values[[1]], type = 'l', col = 'blue')
 
 # ~~~~~~~~~~~~~~ COMPARATIVA ~~~~~~~~~~~~~
 

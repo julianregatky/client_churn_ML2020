@@ -16,3 +16,5 @@ splines_matrix <- function(dataset) {
   mat <- lapply(features.num, function(x) as.data.frame(bs(x,knots = quantile(x)[1:3], degree = 3))) %>% bind_cols()
   return(mat)
 }
+
+s <- suppressWarnings
