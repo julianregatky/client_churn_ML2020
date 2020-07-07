@@ -8,8 +8,8 @@ if (!require('pacman')) install.packages('pacman')
 pacman::p_load(tidyverse,mlr,glmnet,ROCR,splines,rpart,randomForest,gbm,e1071)
 
 # Fijamos el working directory
-#setwd('/Users/julianregatky/Documents/GitHub/client_churn_ML2020')
-setwd('/home/julian/Documents/GitHub/client_churn_ML2020')
+setwd('/Users/julianregatky/Documents/GitHub/client_churn_ML2020')
+#setwd('/home/julian/Documents/GitHub/client_churn_ML2020')
 
 # Importamos el dataset
 dataset <- read.table('train.csv', header = T, sep =',', dec = '.')
@@ -102,25 +102,19 @@ rm(list = setdiff(ls(),c('dataset','index_train')))
 test <- dataset[setdiff(1:nrow(dataset),index_train),]
 train <- dataset[index_train,]
 
-full_grid <- expand.grid(mtry = 5:20, sample = seq(0.4,0.8,0.1), maxnodes = 20:50, nodesize = 50:200, ntree = seq(200,1000,100))
-random_grid <- full_grid[sample(1:nrow(full_grid),30),]
-best_auc <- 0
-for(i in 1:nrow(random_grid)) {
-  random.forest <- randomForest(factor(TARGET) ~ .,
-                               data = train,
-                               mtry = random_grid$mtry[i],
-                               ntree = random_grid$ntree[i],
-                               sample = floor(random_grid$sample[i]*nrow(train)),
-                               maxnodes = random_grid$maxnodes[i],
-                               nodesize = random_grid$nodesize[i]
-  )
-  pred.rforest.oob = random.forest$votes[,2]
-  cat(i,'|',paste(colnames(random_grid),random_grid[i,],collapse = ' - '),'| auc:',performance(prediction(pred.rforest.oob,train$TARGET),"auc")@y.values[[1]],'\n')
-  if(performance(prediction(pred.rforest.oob,train$TARGET),"auc")@y.values[[1]] > best_auc) {
-    best_model <- random.forest
-    best_auc <- performance(prediction(pred.rforest.oob,train$TARGET),"auc")@y.values[[1]]
-  }
-}
+random.forest <- randomForest(factor(TARGET) ~ .,
+                              data = train,
+                              mtry = floor(sqrt(ncol(train))),
+                              ntree = random_grid$ntree[i],
+                              sample = floor(random_grid$sample[i]*nrow(train)),
+                              maxnodes = random_grid$maxnodes[i],
+                              nodesize = random_grid$nodesize[i],
+                              importance = T)
+
+tune.rf <- tuneRF(x = subset(train, select = -TARGET), y = train$TARGET, ntreeTry = 500, doBest = TRUE)
+random.forest <- randomForest(factor(TARGET) ~ .,
+                              data = train,
+                              importance = T)
 
 
 pred.rforest = predict(best_model,newdata=test)
