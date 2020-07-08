@@ -204,7 +204,7 @@ points(auc_nnet@x.values[[1]],auc_nnet@y.values[[1]], type = 'l', col = 'blue')
 plot(auc_lasso)
 points(auc_rforest@x.values[[1]],auc_rforest@y.values[[1]], type = 'l', col = 'red')
 points(auc_gbm@x.values[[1]],auc_gbm@y.values[[1]], type = 'l', col = 'blue')
-legend(0.7,0.25, legend = c('LASSO','Random Forest','GBM'), col = c('black','red','blue'),
+legend(0.62,0.25, legend = c('LASSO','Random Forest','GBM'), col = c('black','red','blue'),
        lty=rep(1,3), cex=0.6)
 
 # ggplot(data = data.frame(est = as.vector(pred.lasso),
