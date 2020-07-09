@@ -164,41 +164,6 @@ pred.gbm = predict(best_model,newdata=test, type="response")
 performance(prediction(pred.gbm,test$TARGET),"auc")@y.values[[1]] #AUC
 auc_gbm <- performance(prediction(pred.gbm,test$TARGET),"tpr","fpr")
 
-###########################
-###        NNET         ###
-###########################
-#rm(list = setdiff(ls(),c('dataset','index_train','s')))
-
-# Separamos en training, validation y testing sets (testing set idem antes)
-test <- dataset[setdiff(1:nrow(dataset),index_train),]
-index_validation <- sample(index_train,nrow(test)) # Separamos misma cant de obs que test set pero del training set para validación
-train <- dataset[setdiff(index_train, index_validation),]
-validation <- dataset[index_validation,]
-
-full_grid <- expand.grid(size = 4:8, decay = seq(0.01,0.1,0.01))
-random_grid <- full_grid[sample(1:nrow(full_grid),15),]
-best_auc <- 0
-for(i in 1:nrow(random_grid)) {
-  model.nnet <- nnet(x = train[,setdiff(colnames(train),'TARGET')],
-                     y = class.ind(train$TARGET),
-                     size = random_grid$size[i],
-                     linout = FALSE, # linout = TRUE (en caso de resolver prob de reg.)
-                     entropy = TRUE, # Función de riesgo empírico a minimizar.
-                     decay = random_grid$decay[i],   # Parámetro de regularización "lambda".
-                     maxit = 1000)
-  pred.nnet = predict(model.nnet,newdata=validation)
-  cat(i,'|',paste(colnames(random_grid),random_grid[i,],collapse = ' - '),'| auc:',performance(prediction(pred.nnet[,2],validation$TARGET),"auc")@y.values[[1]],'\n')
-  if(performance(prediction(pred.nnet[,2],validation$TARGET),"auc")@y.values[[1]] > best_auc) {
-    best_model <- model.nnet
-    best_auc <- performance(prediction(pred.nnet[,2],validation$TARGET),"auc")@y.values[[1]]
-  }
-}
-
-pred.nnet = predict(model.nnet,newdata=test)[,2]
-performance(prediction(pred.nnet,test$TARGET),"auc")@y.values[[1]] #AUC
-auc_nnet <- performance(prediction(pred.nnet,test$TARGET),"tpr","fpr")
-points(auc_nnet@x.values[[1]],auc_nnet@y.values[[1]], type = 'l', col = 'blue')
-
 # ~~~~~~~~~~~~~~ COMPARATIVA ~~~~~~~~~~~~~
 
 plot(auc_lasso)
@@ -207,8 +172,15 @@ points(auc_gbm@x.values[[1]],auc_gbm@y.values[[1]], type = 'l', col = 'blue')
 legend(0.62,0.25, legend = c('LASSO','Random Forest','GBM'), col = c('black','red','blue'),
        lty=rep(1,3), cex=0.6)
 
-# ggplot(data = data.frame(est = as.vector(pred.lasso),
-#                          actual = factor(y_validation)), aes(x = est, fill = actual, alpha = 0.8)) +
-#   geom_density() +
-#   theme_bw()
-
+ggplot(data = data.frame(est = c(as.vector(pred.lasso), as.vector(pred.gbm)),
+                         actual = rep(factor(test$TARGET),2),
+                         Model = c(rep('LASSO',nrow(test)),rep('GBM',nrow(test)))) %>%
+         filter(log(est) > -6),
+       aes(x = log(est), fill = actual, alpha = 0.8)) +
+  geom_density() +
+  facet_wrap(~Model) +
+  labs(title = 'Distribución de las clases según probabilidad predicha',
+       fill = 'Churn',
+       x = 'log(Probabilidad predicha)',
+       y = 'Densidad') +
+  theme_bw()
