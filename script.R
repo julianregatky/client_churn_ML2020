@@ -5,7 +5,7 @@ rm(list=ls())
 # Cargamos todas las librerías necesarias
 # pacman las carga y, de no estar instaladas, previamente las instala
 if (!require('pacman')) install.packages('pacman')
-pacman::p_load(tidyverse,mlr,glmnet,ROCR,splines,rpart,randomForest,gbm,nnet)
+pacman::p_load(tidyverse,mlr,glmnet,ROCR,splines,rpart,randomForest,gbm,tictoc)
 
 # Fijamos el working directory
 #setwd('/Users/julianregatky/Documents/GitHub/client_churn_ML2020')
@@ -17,6 +17,7 @@ dataset <- read.table('train.csv', header = T, sep =',', dec = '.')
 # Cargamos funciones propias
 source('functions.R')
 
+tic()
 # ~~~~~~~ ANÁLISIS EXPLORATORIO Y FEATURE ENGINEERING ~~~~~~~~~~
 
 # Eliminamos ID
@@ -130,7 +131,7 @@ auc_rforest <- performance(prediction(pred.rforest,test$TARGET),"tpr","fpr")
 ###########################
 ###        GBM          ###
 ###########################
-rm(list = setdiff(ls(),c('dataset','index_train','s','auc_lasso','pred.lasso','auc_rforest','auc_rforest')))
+rm(list = setdiff(ls(),c('dataset','index_train','s','auc_lasso','pred.lasso','auc_rforest','pred.rforest')))
 
 # Separamos en training, validation y testing sets (testing set idem antes)
 test <- dataset[setdiff(1:nrow(dataset),index_train),]
@@ -165,22 +166,27 @@ performance(prediction(pred.gbm,test$TARGET),"auc")@y.values[[1]] #AUC
 auc_gbm <- performance(prediction(pred.gbm,test$TARGET),"tpr","fpr")
 
 # ~~~~~~~~~~~~~~ COMPARATIVA ~~~~~~~~~~~~~
+toc()
+save(pred.lasso,auc_lasso,pred.rforest,auc_rforest,pred.gbm,auc_gbm, file = 'results.RData')
 
-plot(auc_lasso)
+plot(auc_lasso, main = 'Curva de ROC')
 points(auc_rforest@x.values[[1]],auc_rforest@y.values[[1]], type = 'l', col = 'red')
 points(auc_gbm@x.values[[1]],auc_gbm@y.values[[1]], type = 'l', col = 'blue')
-legend(0.62,0.25, legend = c('LASSO','Random Forest','GBM'), col = c('black','red','blue'),
+legend(0.56,0.25, legend = c('LASSO','Random Forest','GBM'), col = c('black','red','blue'),
        lty=rep(1,3), cex=0.6)
 
-ggplot(data = data.frame(est = c(as.vector(pred.lasso), as.vector(pred.gbm)),
-                         actual = rep(factor(test$TARGET),2),
-                         Model = c(rep('LASSO',nrow(test)),rep('GBM',nrow(test)))) %>%
-         filter(log(est) > -6),
-       aes(x = log(est), fill = actual, alpha = 0.8)) +
+ggplot(data = data.frame(est = c(as.vector(pred.lasso), as.vector(pred.rforest), as.vector(pred.gbm)),
+                         actual = rep(factor(test$TARGET),3),
+                         Model = c(rep('1. LASSO',nrow(test)),rep('2. Random Forest',nrow(test)),rep('3. GBM',nrow(test)))) %>%
+         filter(log(est) > -6) %>%
+         mutate(Churn = ifelse(actual == 0,'No Churn','Churn')),
+       aes(x = log(est), fill = Churn, alpha = 0.8)) +
   geom_density() +
   facet_wrap(~Model) +
   labs(title = 'Distribución de las clases según probabilidad predicha',
-       fill = 'Churn',
+       fill = '',
        x = 'log(Probabilidad predicha)',
        y = 'Densidad') +
-  theme_bw()
+  theme_bw() +
+  guides(alpha = FALSE)
+ggsave(filename = 'distrib.png')
