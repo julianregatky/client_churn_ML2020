@@ -90,8 +90,13 @@ model.lasso = glmnet(x = x_train_matrix,
 
 x_test_matrix <- model.matrix( ~ .-1, x_test)
 pred.lasso = predict(model.lasso, s = lambda_star , newx = x_test_matrix, type = 'response')
-performance(prediction(pred.lasso,y_test),"auc")@y.values[[1]] #AUC
+
+# AUC
+performance(prediction(pred.lasso,y_test),"auc")@y.values[[1]]
 auc_lasso <- performance(prediction(pred.lasso,y_test),"tpr","fpr")
+
+# Accuracy (apriori probs)
+sum(diag(prop.table(table(y_test == 0,pred.lasso <= sum(y_test)/length(y_test)))))
 
 ###########################
 ###    Random Forest    ###
@@ -124,9 +129,13 @@ for(i in 1:nrow(random_grid)) {
 }
 
 pred.rforest = predict(best_model,newdata=test)
+
+# AUC
 performance(prediction(pred.rforest,factor(test$TARGET)),"auc")@y.values[[1]] #AUC
 auc_rforest <- performance(prediction(pred.rforest,test$TARGET),"tpr","fpr")
 
+# Accuracy (apriori)
+sum(diag(prop.table(table(y_test == 0,pred.rforest <= sum(y_test)/length(y_test)))))
 
 ###########################
 ###        GBM          ###
@@ -167,13 +176,16 @@ auc_gbm <- performance(prediction(pred.gbm,test$TARGET),"tpr","fpr")
 
 # ~~~~~~~~~~~~~~ COMPARATIVA ~~~~~~~~~~~~~
 toc()
-save(pred.lasso,auc_lasso,pred.rforest,auc_rforest,pred.gbm,auc_gbm, file = 'results.RData')
 
 plot(auc_lasso, main = 'Curva de ROC')
 points(auc_rforest@x.values[[1]],auc_rforest@y.values[[1]], type = 'l', col = 'red')
 points(auc_gbm@x.values[[1]],auc_gbm@y.values[[1]], type = 'l', col = 'blue')
 legend(0.56,0.25, legend = c('LASSO','Random Forest','GBM'), col = c('black','red','blue'),
        lty=rep(1,3), cex=0.6)
+
+acc.lasso <- sum(diag(prop.table(table(test$TARGET == 0,pred.lasso <= sum(train$TARGET)/length(train$TARGET)))))
+acc.rf <- sum(diag(prop.table(table(test$TARGET == 0,pred.rforest <= sum(train$TARGET)/length(train$TARGET)))))
+acc.gbm <- sum(diag(prop.table(table(test$TARGET == 0,pred.gbm <= sum(train$TARGET)/length(train$TARGET)))))
 
 ggplot(data = data.frame(est = c(as.vector(pred.lasso), as.vector(pred.rforest), as.vector(pred.gbm)),
                          actual = rep(factor(test$TARGET),3),
