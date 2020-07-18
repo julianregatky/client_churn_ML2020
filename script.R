@@ -40,13 +40,23 @@ for(i in 1:(ncol(dataset_full)-1)) {
 }
 dataset <- dataset[,setdiff(1:ncol(dataset),del_col)] # Eliminamos una de las duplicadas
 
+ct <- 0
+for(i in 1:ncol(dataset)) {
+  most_freq <- prop.table(table(dataset[,i])) %>% .[order(desc(.))] %>% .[1]
+  if(most_freq > 0.9) {
+    dataset[,i] <- as.character(dataset[,i]) == names(most_freq)
+    ct <- ct + 1
+    cat('\rVariables binarizadas:',ct)
+  }
+}
+
 # La variable 'nac' es la única que cuenta con datos faltantes (56 obs con NA)
-# Esto representa sólo ~0.17% de las obs. Imputamos datos faltantes con el valor 2
+# Esto representa sólo ~0.17% de las obs. Imputamos datos faltantes con el valor TRUE
 # que es el reportado para la variable en ~97.8% de los casos.
 sum(is.na(dataset$nac))/length(dataset$nac) # ~0.17%
-sum(dataset$nac[!is.na(dataset$nac)] == 2)/sum(!is.na(dataset$nac)) # ~97.8%
+sum(dataset$nac[!is.na(dataset$nac)] == TRUE)/sum(!is.na(dataset$nac)) # ~97.8%
 
-dataset$nac[is.na(dataset$nac)] <- 2
+dataset$nac[is.na(dataset$nac)] <- TRUE
 
 # ~~~~~~~~~~~~~~ MODELOS ~~~~~~~~~~~~~
 
@@ -57,14 +67,8 @@ index_train <- sample(1:nrow(dataset),round(nrow(dataset)*0.8)) # Muestra de tra
 ###       LASSO         ###
 ###########################
 
-# Si agregamos nomonios adicionales para todos los features
-# el algoritmo que usa glmnet para la regresión no converge
-# Seleccionamos las variables para splines con un árbol de decisión
-# Sólo usamos datos de training para evitar data leakage!
-tree <- rpart(formula = TARGET ~., data = dataset[index_train,]) 
-features_importantes <- names(tree$variable.importance)
-# Control local polinómico de hasta grado 3
-features.spline <- splines_matrix(dataset[,features_importantes])
+# Control local polinómico de hasta grado 3 (splines cúbicos)
+features.spline <- splines_matrix(dataset[,setdiff(colnames(dataset),'TARGET')])
 
 dataset.lasso <- cbind(dataset,features.spline)
 
@@ -76,9 +80,10 @@ y_test <- dataset.lasso[setdiff(1:nrow(dataset.lasso),index_train),'TARGET']
 
 # Cross-Validation, 10 folds
 x_train_matrix <- model.matrix( ~ .-1, x_train)
-cv.out = cv.glmnet(x_train_matrix, y_train, alpha = 1, nfolds = 10)
+cv.out = cv.glmnet(x_train_matrix, y_train, alpha = 1, nfolds = 5,
+                   family = 'binomial', type.measure = 'auc')
 plot(cv.out)
-lambda_star = cv.out$lambda.min
+lambda_star = cv.out$lambda.1se
 
 # Estimamos el modelo con el lambda de CV
 model.lasso = glmnet(x = x_train_matrix,
@@ -95,9 +100,6 @@ pred.lasso = predict(model.lasso, s = lambda_star , newx = x_test_matrix, type =
 performance(prediction(pred.lasso,y_test),"auc")@y.values[[1]]
 auc_lasso <- performance(prediction(pred.lasso,y_test),"tpr","fpr")
 
-# Accuracy (apriori probs)
-sum(diag(prop.table(table(y_test == 0,pred.lasso <= sum(y_test)/length(y_test)))))
-
 ###########################
 ###    Random Forest    ###
 ###########################
@@ -105,11 +107,9 @@ rm(list = setdiff(ls(),c('dataset','index_train','s','auc_lasso','pred.lasso')))
 
 # Separamos en training, validation y testing sets (testing set idem antes)
 test <- dataset[setdiff(1:nrow(dataset),index_train),]
-index_validation <- sample(index_train,nrow(test)) # Separamos misma cant de obs que test set pero del training set para validación
-train <- dataset[setdiff(index_train, index_validation),]
-validation <- dataset[index_validation,]
+train <- dataset[index_train,]
 
-full_grid <- expand.grid(mtry = 5:20, ntree = seq(100,3000,100), maxnodes = seq(20,100,5))
+full_grid <- expand.grid(mtry = 5:20, ntree = seq(500,3000,100), maxnodes = seq(20,100,5))
 random_grid <- full_grid[sample(1:nrow(full_grid),30),]
 best_auc <- 0
 for(i in 1:nrow(random_grid)) {
@@ -120,11 +120,11 @@ for(i in 1:nrow(random_grid)) {
                                 maxnodes = random_grid$maxnodes[i],
                                 importance = T,
                                 proximity = F))
-  pred.rforest = predict(random.forest,newdata=validation)
-  cat(i,'|',paste(colnames(random_grid),random_grid[i,],collapse = ' - '),'| auc:',performance(prediction(pred.rforest,validation$TARGET),"auc")@y.values[[1]],'\n')
-  if(performance(prediction(pred.rforest,validation$TARGET),"auc")@y.values[[1]] > best_auc) {
+  pred.rforest = random.forest$predicted
+  cat(i,'|',paste(colnames(random_grid),random_grid[i,],collapse = ' - '),'| auc oob:',performance(prediction(pred.rforest,train$TARGET),"auc")@y.values[[1]],'\n')
+  if(performance(prediction(pred.rforest,train$TARGET),"auc")@y.values[[1]] > best_auc) {
     best_model <- random.forest
-    best_auc <- performance(prediction(pred.rforest,validation$TARGET),"auc")@y.values[[1]]
+    best_auc <- performance(prediction(pred.rforest,train$TARGET),"auc")@y.values[[1]]
   }
 }
 
@@ -133,9 +133,6 @@ pred.rforest = predict(best_model,newdata=test)
 # AUC
 performance(prediction(pred.rforest,factor(test$TARGET)),"auc")@y.values[[1]] #AUC
 auc_rforest <- performance(prediction(pred.rforest,test$TARGET),"tpr","fpr")
-
-# Accuracy (apriori)
-sum(diag(prop.table(table(y_test == 0,pred.rforest <= sum(y_test)/length(y_test)))))
 
 ###########################
 ###        GBM          ###
