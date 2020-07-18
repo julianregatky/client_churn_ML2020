@@ -109,7 +109,7 @@ rm(list = setdiff(ls(),c('dataset','index_train','s','auc_lasso','pred.lasso')))
 test <- dataset[setdiff(1:nrow(dataset),index_train),]
 train <- dataset[index_train,]
 
-full_grid <- expand.grid(mtry = 5:20, ntree = seq(500,3000,100), maxnodes = seq(20,100,5))
+full_grid <- expand.grid(mtry = 10:50, ntree = seq(1000,3000,100), maxnodes = seq(20,100,5))
 random_grid <- full_grid[sample(1:nrow(full_grid),30),]
 best_auc <- 0
 for(i in 1:nrow(random_grid)) {
