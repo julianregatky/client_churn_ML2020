@@ -44,7 +44,7 @@ ct <- 0
 for(i in 1:ncol(dataset)) {
   most_freq <- prop.table(table(dataset[,i])) %>% .[order(desc(.))] %>% .[1]
   if(most_freq > 0.9) {
-    dataset[,i] <- as.character(dataset[,i]) == names(most_freq)
+    dataset[,i] <- as.numeric(as.character(dataset[,i]) == names(most_freq))
     ct <- ct + 1
     cat('\rVariables binarizadas:',ct)
   }
@@ -56,7 +56,7 @@ for(i in 1:ncol(dataset)) {
 sum(is.na(dataset$nac))/length(dataset$nac) # ~0.17%
 sum(dataset$nac[!is.na(dataset$nac)] == TRUE)/sum(!is.na(dataset$nac)) # ~97.8%
 
-dataset$nac[is.na(dataset$nac)] <- TRUE
+dataset$nac[is.na(dataset$nac)] <- 1
 
 # ~~~~~~~~~~~~~~ MODELOS ~~~~~~~~~~~~~
 
@@ -103,14 +103,15 @@ auc_lasso <- performance(prediction(pred.lasso,y_test),"tpr","fpr")
 ###########################
 ###    Random Forest    ###
 ###########################
-rm(list = setdiff(ls(),c('dataset','index_train','s','auc_lasso','pred.lasso')))
+rm(list = setdiff(ls(),c('dataset','index_train','s','model.lasso','auc_lasso','pred.lasso')))
 
 # Separamos en training, validation y testing sets (testing set idem antes)
 test <- dataset[setdiff(1:nrow(dataset),index_train),]
 train <- dataset[index_train,]
 
+set.seed(123)
 full_grid <- expand.grid(mtry = 10:50, ntree = seq(1000,3000,100), maxnodes = seq(20,100,5))
-random_grid <- full_grid[sample(1:nrow(full_grid),30),]
+random_grid <- full_grid[sample(1:nrow(full_grid),20),]
 best_auc <- 0
 for(i in 1:nrow(random_grid)) {
   random.forest <- s(randomForest(TARGET ~.,
@@ -128,6 +129,7 @@ for(i in 1:nrow(random_grid)) {
   }
 }
 
+model.rforest <- best_model
 pred.rforest = predict(best_model,newdata=test)
 
 # AUC
@@ -137,16 +139,17 @@ auc_rforest <- performance(prediction(pred.rforest,test$TARGET),"tpr","fpr")
 ###########################
 ###        GBM          ###
 ###########################
-rm(list = setdiff(ls(),c('dataset','index_train','s','auc_lasso','pred.lasso','auc_rforest','pred.rforest')))
+rm(list = setdiff(ls(),c('dataset','index_train','s','model.lasso','auc_lasso','pred.lasso','model.rforest','auc_rforest','pred.rforest')))
 
 # Separamos en training, validation y testing sets (testing set idem antes)
+set.seed(123)
 test <- dataset[setdiff(1:nrow(dataset),index_train),]
-index_validation <- sample(index_train,nrow(test)) # Separamos misma cant de obs que test set pero del training set para validación
+index_validation <- sample(index_train,nrow(test)/2) # Separamos obs del training set para validación
 train <- dataset[setdiff(index_train, index_validation),]
 validation <- dataset[index_validation,]
 
-full_grid <- expand.grid(n.trees = seq(100,1000,100), shrinkage = seq(0.001,0.01,0.001), interaction.depth = 2:10, train.fraction = seq(0.5,0.9,0.1), bag.fraction = seq(0.5,0.9,0.1))
-random_grid <- full_grid[sample(1:nrow(full_grid),30),]
+full_grid <- expand.grid(n.trees = seq(500,5000,100), shrinkage = seq(0.001,0.01,0.001), interaction.depth = 2:10, train.fraction = seq(0.5,0.9,0.1), bag.fraction = seq(0.5,0.9,0.1))
+random_grid <- full_grid[sample(1:nrow(full_grid),20),]
 best_auc <- 0
 for(i in 1:nrow(random_grid)) {
   model.gbm = gbm(TARGET ~ .,
@@ -157,19 +160,22 @@ for(i in 1:nrow(random_grid)) {
                 interaction.depth = random_grid$interaction.depth[i],
                 train.fraction = random_grid$train.fraction[i],
                 bag.fraction = random_grid$bag.fraction[i],
-                cv.folds = 5, 
                 verbose = F)
   pred.gbm = predict(model.gbm,newdata=validation)
-  cat(i,'|',paste(colnames(random_grid),random_grid[i,],collapse = ' - '),'| auc:',performance(prediction(pred.gbm,validation$TARGET),"auc")@y.values[[1]],'\n')
+  cat(i,'|',paste(colnames(random_grid),random_grid[i,],collapse = ' - '),'| auc-validation:',performance(prediction(pred.gbm,validation$TARGET),"auc")@y.values[[1]],'\n')
   if(performance(prediction(pred.gbm,validation$TARGET),"auc")@y.values[[1]] > best_auc) {
     best_model <- model.gbm
     best_auc <- performance(prediction(pred.gbm,validation$TARGET),"auc")@y.values[[1]]
   }
 }
 
+best_gbm <- best_model
+
 pred.gbm = predict(best_model,newdata=test, type="response")
 performance(prediction(pred.gbm,test$TARGET),"auc")@y.values[[1]] #AUC
 auc_gbm <- performance(prediction(pred.gbm,test$TARGET),"tpr","fpr")
+
+gbm.perf(best_gbm)
 
 # ~~~~~~~~~~~~~~ COMPARATIVA ~~~~~~~~~~~~~
 toc()
