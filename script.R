@@ -43,7 +43,7 @@ dataset <- dataset[,setdiff(1:ncol(dataset),del_col)] # Eliminamos una de las du
 ct <- 0
 for(i in 1:ncol(dataset)) {
   most_freq <- prop.table(table(dataset[,i])) %>% .[order(desc(.))] %>% .[1]
-  if(most_freq > 0.9) {
+  if(most_freq > 0.9 & colnames(dataset)[i] != 'TARGET') {
     dataset[,i] <- as.numeric(as.character(dataset[,i]) == names(most_freq))
     ct <- ct + 1
     cat('\rVariables binarizadas:',ct)
@@ -193,9 +193,9 @@ acc.gbm <- sum(diag(prop.table(table(test$TARGET == 0,pred.gbm <= sum(train$TARG
 ggplot(data = data.frame(est = c(as.vector(pred.lasso), as.vector(pred.rforest), as.vector(pred.gbm)),
                          actual = rep(factor(test$TARGET),3),
                          Model = c(rep('1. LASSO',nrow(test)),rep('2. Random Forest',nrow(test)),rep('3. GBM',nrow(test)))) %>%
-         filter(log(est) > -6) %>%
+         #filter(log(est) > -0.75) %>%
          mutate(Churn = ifelse(actual == 0,'No Churn','Churn')),
-       aes(x = log(est), fill = Churn, alpha = 0.8)) +
+       aes(x = est, fill = Churn, alpha = 0.8)) +
   geom_density() +
   facet_wrap(~Model) +
   labs(title = 'Distribución de las clases según probabilidad predicha',
