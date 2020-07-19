@@ -110,7 +110,7 @@ test <- dataset[setdiff(1:nrow(dataset),index_train),]
 train <- dataset[index_train,]
 
 set.seed(123)
-full_grid <- expand.grid(mtry = 10:50, ntree = seq(1000,3000,100), maxnodes = seq(20,100,5))
+full_grid <- expand.grid(mtry = 10:50, ntree = seq(1000,000,100), maxnodes = seq(20,100,5))
 random_grid <- full_grid[sample(1:nrow(full_grid),20),]
 best_auc <- 0
 for(i in 1:nrow(random_grid)) {
@@ -190,12 +190,15 @@ acc.lasso <- sum(diag(prop.table(table(test$TARGET == 0,pred.lasso <= sum(train$
 acc.rf <- sum(diag(prop.table(table(test$TARGET == 0,pred.rforest <= sum(train$TARGET)/length(train$TARGET)))))
 acc.gbm <- sum(diag(prop.table(table(test$TARGET == 0,pred.gbm <= sum(train$TARGET)/length(train$TARGET)))))
 
+f1.lasso <- f1.score(pred.lasso,test$TARGET,sum(train$TARGET)/length(train$TARGET))
+f1.rf <- f1.score(pred.rforest,test$TARGET,sum(train$TARGET)/length(train$TARGET))
+f1.gbm <- f1.score(pred.gbm,test$TARGET,sum(train$TARGET)/length(train$TARGET))
+
 ggplot(data = data.frame(est = c(as.vector(pred.lasso), as.vector(pred.rforest), as.vector(pred.gbm)),
                          actual = rep(factor(test$TARGET),3),
                          Model = c(rep('1. LASSO',nrow(test)),rep('2. Random Forest',nrow(test)),rep('3. GBM',nrow(test)))) %>%
-         #filter(log(est) > -0.75) %>%
          mutate(Churn = ifelse(actual == 0,'No Churn','Churn')),
-       aes(x = est, fill = Churn, alpha = 0.8)) +
+       aes(x = log(est), fill = Churn, alpha = 0.8)) +
   geom_density() +
   facet_wrap(~Model) +
   labs(title = 'Distribución de las clases según probabilidad predicha',

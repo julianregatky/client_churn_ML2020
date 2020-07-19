@@ -4,4 +4,11 @@ splines_matrix <- function(dataset) {
   return(mat)
 }
 
+f1.score <- function(pred,actual,cutoff) {
+  conf.matrix <- table(pred = pred < cutoff,actual = actual < cutoff)
+  precision <- conf.matrix[2,2]/sum(conf.matrix[2,])
+  recall <- conf.matrix[2,2]/sum(conf.matrix[,2])
+  f1_score <- 2*(precision*recall)/(precision+recall)
+}
+
 s <- suppressWarnings
