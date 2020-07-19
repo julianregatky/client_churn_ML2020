@@ -110,7 +110,7 @@ test <- dataset[setdiff(1:nrow(dataset),index_train),]
 train <- dataset[index_train,]
 
 set.seed(123)
-full_grid <- expand.grid(mtry = 10:50, ntree = seq(1000,000,100), maxnodes = seq(20,100,5))
+full_grid <- expand.grid(mtry = 10:50, ntree = seq(1000,3000,100), maxnodes = seq(20,100,5))
 random_grid <- full_grid[sample(1:nrow(full_grid),20),]
 best_auc <- 0
 for(i in 1:nrow(random_grid)) {
