@@ -59,7 +59,6 @@ for(i in 1:ncol(dataset)) {
   most_freq <- prop.table(table(dataset[,i])) %>% .[order(desc(.))] %>% .[1]
   if(most_freq > 0.9 & colnames(dataset)[i] != 'TARGET') {
     dataset[,i] <- as.numeric(as.character(dataset[,i]) == names(most_freq))
-    ct <- ct + 1
   }
 }
 
@@ -194,6 +193,7 @@ auc_gbm <- performance(prediction(pred.gbm,test$TARGET),"tpr","fpr")
 gbm.perf(best_gbm)
 
 toc() # Fin del timer
+
 # ~~~~~~~~~~~~~~ COMPARATIVA ~~~~~~~~~~~~~
 
 # Plot de curva de ROC para los 3 modelos
