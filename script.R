@@ -103,7 +103,7 @@ auc_lasso <- performance(prediction(pred.lasso,y_test),"tpr","fpr")
 ###########################
 ###    Random Forest    ###
 ###########################
-rm(list = setdiff(ls(),c('dataset','index_train','s','model.lasso','auc_lasso','pred.lasso')))
+rm(list = setdiff(ls(),c('dataset','index_train','s','f1.score','model.lasso','auc_lasso','pred.lasso')))
 
 # Separamos en training, validation y testing sets (testing set idem antes)
 test <- dataset[setdiff(1:nrow(dataset),index_train),]
@@ -139,12 +139,12 @@ auc_rforest <- performance(prediction(pred.rforest,test$TARGET),"tpr","fpr")
 ###########################
 ###        GBM          ###
 ###########################
-rm(list = setdiff(ls(),c('dataset','index_train','s','model.lasso','auc_lasso','pred.lasso','model.rforest','auc_rforest','pred.rforest')))
+rm(list = setdiff(ls(),c('dataset','index_train','s','f1.score','model.lasso','auc_lasso','pred.lasso','model.rforest','auc_rforest','pred.rforest')))
 
 # Separamos en training, validation y testing sets (testing set idem antes)
 set.seed(123)
 test <- dataset[setdiff(1:nrow(dataset),index_train),]
-index_validation <- sample(index_train,nrow(test)) # Separamos obs del training set para validación
+index_validation <- sample(index_train,nrow(test)/2) # Separamos obs del training set para validación
 train <- dataset[setdiff(index_train, index_validation),]
 validation <- dataset[index_validation,]
 
