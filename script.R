@@ -1,6 +1,6 @@
 rm(list=ls())
 
-# ~~~~~~~~~~~~~~ GENERAL SETTINGS ~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~ SETTINGS GENERALES ~~~~~~~~~~~~~~~~~
 
 # Cargamos todas las librerías necesarias
 # pacman las carga y, de no estar instaladas, previamente las instala
@@ -14,18 +14,32 @@ setwd('/home/julian/Documents/GitHub/client_churn_ML2020')
 # Importamos el dataset
 dataset <- read.table('train.csv', header = T, sep =',', dec = '.')
 
-# Cargamos funciones propias
-source('functions.R')
+# ~~~~~~~~~~~~~~ Funciones propias ~~~~~~~~~~~~~~
 
-tic()
-# ~~~~~~~ ANÁLISIS EXPLORATORIO Y FEATURE ENGINEERING ~~~~~~~~~~
+splines_matrix <- function(dataset) {
+  features.num <- dataset[,unlist(lapply(dataset, is.numeric))]
+  mat <- lapply(features.num, function(x) as.data.frame(bs(x,knots = quantile(x)[2:4], degree = 3))) %>% bind_cols()
+  return(mat)
+}
+
+f1.score <- function(pred,actual,cutoff) {
+  conf.matrix <- table(pred = pred < cutoff,actual = actual < cutoff)
+  precision <- conf.matrix[2,2]/sum(conf.matrix[2,])
+  recall <- conf.matrix[2,2]/sum(conf.matrix[,2])
+  f1_score <- 2*(precision*recall)/(precision+recall)
+}
+
+s <- suppressWarnings
+
+# ~~~~~~~~~~~ DATA: Pre-procesamiento ~~~~~~~~~~~
+tic() # Timer
 
 # Eliminamos ID
 dataset <- dataset %>% select(-ID)
 
-# Eliminamos features cuasi-constantes
+# Eliminamos features cuasi-constantes (threshold 99%)
 dataset <- removeConstantFeatures(dataset,
-                                  perc = 0.01, # Fijamos threshold del 99%
+                                  perc = 0.01,
                                   dont.rm = 'TARGET')
 
 # Unificamos features duplicados
@@ -40,13 +54,12 @@ for(i in 1:(ncol(dataset_full)-1)) {
 }
 dataset <- dataset[,setdiff(1:ncol(dataset),del_col)] # Eliminamos una de las duplicadas
 
-ct <- 0
+# Binarización de features cuasi-constantes (threshold 90%)
 for(i in 1:ncol(dataset)) {
   most_freq <- prop.table(table(dataset[,i])) %>% .[order(desc(.))] %>% .[1]
   if(most_freq > 0.9 & colnames(dataset)[i] != 'TARGET') {
     dataset[,i] <- as.numeric(as.character(dataset[,i]) == names(most_freq))
     ct <- ct + 1
-    cat('\rVariables binarizadas:',ct)
   }
 }
 
@@ -67,18 +80,18 @@ index_train <- sample(1:nrow(dataset),round(nrow(dataset)*0.8)) # Muestra de tra
 ###       LASSO         ###
 ###########################
 
-# Control local polinómico de hasta grado 3 (splines cúbicos)
+# Control local polinómico de grado 3 (splines cúbicos)
 features.spline <- splines_matrix(dataset[,setdiff(colnames(dataset),'TARGET')])
-
 dataset.lasso <- cbind(dataset,features.spline)
 
+# Test y Train
 x_train <- dataset.lasso[index_train,] %>% select(-TARGET)
 x_test <- dataset.lasso[setdiff(1:nrow(dataset.lasso),index_train),] %>% select(-TARGET)
 
 y_train <- dataset.lasso[index_train,'TARGET']
 y_test <- dataset.lasso[setdiff(1:nrow(dataset.lasso),index_train),'TARGET']
 
-# Cross-Validation, 10 folds
+# Cross-Validation, 5 folds
 x_train_matrix <- model.matrix( ~ .-1, x_train)
 cv.out = cv.glmnet(x_train_matrix, y_train, alpha = 1, nfolds = 5,
                    family = 'binomial', type.measure = 'auc')
@@ -94,7 +107,7 @@ model.lasso = glmnet(x = x_train_matrix,
                      standardize = TRUE)
 
 x_test_matrix <- model.matrix( ~ .-1, x_test)
-pred.lasso = predict(model.lasso, s = lambda_star , newx = x_test_matrix, type = 'response')
+pred.lasso = predict(model.lasso, s = lambda_star , newx = x_test_matrix, type = 'response') # Predicciones
 
 # AUC
 performance(prediction(pred.lasso,y_test),"auc")@y.values[[1]]
@@ -105,13 +118,13 @@ auc_lasso <- performance(prediction(pred.lasso,y_test),"tpr","fpr")
 ###########################
 rm(list = setdiff(ls(),c('dataset','index_train','s','f1.score','model.lasso','auc_lasso','pred.lasso')))
 
-# Separamos en training, validation y testing sets (testing set idem antes)
+# Test y Train (idem antes, pero ya no los necesitamos en model.matrix)
 test <- dataset[setdiff(1:nrow(dataset),index_train),]
 train <- dataset[index_train,]
 
 set.seed(123)
-full_grid <- expand.grid(mtry = 10:50, ntree = seq(1000,3000,100), maxnodes = seq(20,100,5))
-random_grid <- full_grid[sample(1:nrow(full_grid),20),]
+full_grid <- expand.grid(mtry = 10:50, ntree = seq(1000,3000,100), maxnodes = seq(20,100,5)) # Grid con combinaciones de hiperparámetros
+random_grid <- full_grid[sample(1:nrow(full_grid),20),] # Selección aleatoria
 best_auc <- 0
 for(i in 1:nrow(random_grid)) {
   random.forest <- s(randomForest(TARGET ~.,
@@ -121,9 +134,10 @@ for(i in 1:nrow(random_grid)) {
                                 maxnodes = random_grid$maxnodes[i],
                                 importance = T,
                                 proximity = F))
-  pred.rforest = random.forest$predicted
+  pred.rforest = random.forest$predicted # Predicciones OOB
   cat(i,'|',paste(colnames(random_grid),random_grid[i,],collapse = ' - '),'| auc oob:',performance(prediction(pred.rforest,train$TARGET),"auc")@y.values[[1]],'\n')
   if(performance(prediction(pred.rforest,train$TARGET),"auc")@y.values[[1]] > best_auc) {
+    # Si hay mejor performance OOB, guardamos el modelo
     best_model <- random.forest
     best_auc <- performance(prediction(pred.rforest,train$TARGET),"auc")@y.values[[1]]
   }
@@ -148,6 +162,7 @@ index_validation <- sample(index_train,nrow(test)/2) # Separamos obs del trainin
 train <- dataset[setdiff(index_train, index_validation),]
 validation <- dataset[index_validation,]
 
+# Procedimiento análogo a Random Forest
 full_grid <- expand.grid(n.trees = seq(500,5000,100), shrinkage = seq(0.001,0.01,0.001), interaction.depth = 2:10, train.fraction = seq(0.5,0.9,0.1), bag.fraction = seq(0.5,0.9,0.1))
 random_grid <- full_grid[sample(1:nrow(full_grid),20),]
 best_auc <- 0
@@ -164,6 +179,7 @@ for(i in 1:nrow(random_grid)) {
   pred.gbm = predict(model.gbm,newdata=validation)
   cat(i,'|',paste(colnames(random_grid),random_grid[i,],collapse = ' - '),'| auc-validation:',performance(prediction(pred.gbm,validation$TARGET),"auc")@y.values[[1]],'\n')
   if(performance(prediction(pred.gbm,validation$TARGET),"auc")@y.values[[1]] > best_auc) {
+    # Si hay mejor performance en validation set, guardamos el modelo
     best_model <- model.gbm
     best_auc <- performance(prediction(pred.gbm,validation$TARGET),"auc")@y.values[[1]]
   }
@@ -177,23 +193,29 @@ auc_gbm <- performance(prediction(pred.gbm,test$TARGET),"tpr","fpr")
 
 gbm.perf(best_gbm)
 
+toc() # Fin del timer
 # ~~~~~~~~~~~~~~ COMPARATIVA ~~~~~~~~~~~~~
-toc()
 
+# Plot de curva de ROC para los 3 modelos
 plot(auc_lasso, main = 'Curva de ROC')
 points(auc_rforest@x.values[[1]],auc_rforest@y.values[[1]], type = 'l', col = 'red')
 points(auc_gbm@x.values[[1]],auc_gbm@y.values[[1]], type = 'l', col = 'blue')
 legend(0.56,0.25, legend = c('LASSO','Random Forest','GBM'), col = c('black','red','blue'),
        lty=rep(1,3), cex=0.6)
 
+# Accuracy (con probs a priori del training set)
 acc.lasso <- sum(diag(prop.table(table(test$TARGET == 0,pred.lasso <= sum(train$TARGET)/length(train$TARGET)))))
 acc.rf <- sum(diag(prop.table(table(test$TARGET == 0,pred.rforest <= sum(train$TARGET)/length(train$TARGET)))))
 acc.gbm <- sum(diag(prop.table(table(test$TARGET == 0,pred.gbm <= sum(train$TARGET)/length(train$TARGET)))))
 
+# F1 Score (con probs a priori del training set)
 f1.lasso <- f1.score(pred.lasso,test$TARGET,sum(train$TARGET)/length(train$TARGET))
 f1.rf <- f1.score(pred.rforest,test$TARGET,sum(train$TARGET)/length(train$TARGET))
 f1.gbm <- f1.score(pred.gbm,test$TARGET,sum(train$TARGET)/length(train$TARGET))
 
+## (AUC lo fuimos mostrando al finalizar cada modelo arriba) ##
+
+# Separación de clases por modelo
 ggplot(data = data.frame(est = c(as.vector(pred.lasso), as.vector(pred.rforest), as.vector(pred.gbm)),
                          actual = rep(factor(test$TARGET),3),
                          Model = c(rep('1. LASSO',nrow(test)),rep('2. Random Forest',nrow(test)),rep('3. GBM',nrow(test)))) %>%
