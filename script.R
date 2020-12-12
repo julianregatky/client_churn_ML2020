@@ -8,8 +8,7 @@ if (!require('pacman')) install.packages('pacman')
 pacman::p_load(tidyverse,mlr,glmnet,ROCR,splines,rpart,randomForest,gbm,tictoc)
 
 # Fijamos el working directory
-#setwd('/Users/julianregatky/Documents/GitHub/client_churn_ML2020')
-setwd('/home/julian/Documents/GitHub/client_churn_ML2020')
+setwd('...')
 
 # Importamos el dataset
 dataset <- read.table('train.csv', header = T, sep =',', dec = '.')
